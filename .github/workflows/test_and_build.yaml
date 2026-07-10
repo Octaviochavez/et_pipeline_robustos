@@ -1,0 +1,33 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+#Nombre de flujo de trabajo
+name: Python application
+
+#indica cuando tiene que ejecutarse este workflow
+on:
+  # Genera un push o pull request a main para ejecutar el workflow
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+#Permisos
+permissions:
+  contents: read
+
+jobs: #Que tiene que ejecutar este pipeline de CI/CD
+  test_and_build:
+    #Toma una imagen de ubuntu para ejecutar el workflow
+    runs-on: ubuntu-latest
+    #Pasos a ejecutar en el workflow
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.12"
+      - name: Install dependencies on ML service
+        run: pip install -r ml_service/requirements.txt
+      - name: Install dependencies on Dashboard
+        run: pip install -r dashboard/requirements.txt
