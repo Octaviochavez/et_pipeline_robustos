@@ -30,4 +30,4 @@ jobs: #Que tiene que ejecutar este pipeline de CI/CD
       - name: Install dependencies on ML service
         run: pip install -r ml_service/requirements.txt
       - name: Install dependencies on Dashboard
-        run: pip install -r dashboard/requirements.txt
+        run: pip install -r dashboards/requirements.txt
