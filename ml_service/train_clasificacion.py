@@ -2,13 +2,15 @@ import os
 import json
 import pickle
 import pandas as pd
+import sklearn
 
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, classification_report
-import sklearn
 
 sklearn.set_config(transform_output="pandas")
 
@@ -33,36 +35,46 @@ data, y, X = separar_objetivo_features(data, target=TARGET, drop_duplicates=True
 X = corregir_valores_negativos(X)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-pipeline_clasificacion = Pipeline(steps=[
+pipeline_base = [
     ('feature_engineering', FeatureEngineering()),
-    ('imputador', SimpleImputer(strategy='median')), 
+    ('imputador', SimpleImputer(strategy='median')),
     ('winsorizer', Winsorizer(limits=(0.05, 0.05))),
-    ('correlation_filter', CorrelationFilter(threshold=0.9)),
-    ('modelo', DecisionTreeClassifier(criterion='entropy', max_depth=4, min_samples_leaf=10, min_samples_split=10, random_state=42, class_weight='balanced'))
-])
-pipeline_clasificacion.fit(X_train, y_train)
-y_pred = pipeline_clasificacion.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-reporte = classification_report(y_test, y_pred, output_dict=True)
+    ('correlation_filter', CorrelationFilter(threshold=0.9))
+]
 
-print(f"Modelo de Clasificación entrenado con éxito.")
-print(f"Accuracy del modelo: {accuracy:.2%}")
-
-modelo_entrenado = pipeline_clasificacion.named_steps['modelo']
-metricas_clasificacion = {
-    "accuracy": float(accuracy),
-    "parametros_usados": {
-        "criterion": modelo_entrenado.criterion,
-        "max_depth_usado": modelo_entrenado.max_depth,
-        "min_samples_leaf_usado": modelo_entrenado.min_samples_leaf,
-        "min_samples_split_usado": modelo_entrenado.min_samples_split
-    },
-    "reporte_completo": reporte
+modelos_a_entrenar = {
+    "arbol_decision": DecisionTreeClassifier(
+        criterion='entropy', max_depth=4, min_samples_leaf=10, min_samples_split=10, random_state=42, class_weight='balanced'
+    ),
+    "regresion_logistica": LogisticRegression(
+        C=0.01, penalty='l2', solver='saga', random_state=42, class_weight='balanced'
+    ),
+    "svm": SVC(
+        C=0.23273922280628717, gamma='auto', probability=True, random_state=42, class_weight='balanced'
+    )
 }
+metricas_globales = {}
 
-with open("models/metricas_clasificacion.json", "w") as f:
-    json.dump(metricas_clasificacion, f, indent=4)
+for nombre_modelo, algoritmo in modelos_a_entrenar.items():
+    
+    pipeline_actual = Pipeline(steps=pipeline_base + [('modelo', algoritmo)])
+    pipeline_actual.fit(X_train, y_train)
+    
+    y_pred = pipeline_actual.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    reporte = classification_report(y_test, y_pred, output_dict=True)
+    
+    print(f" {nombre_modelo} terminado. Accuracy: {accuracy:.2%}")
+    parametros_usados = pipeline_actual.named_steps['modelo'].get_params()
+    metricas_globales[nombre_modelo] = {
+        "accuracy": float(accuracy),
+        "parametros_usados": parametros_usados,
+        "reporte_completo": reporte
+    }
+    
+    pickle.dump(pipeline_actual, open(f"models/modelo_{nombre_modelo}.pkl", "wb"))
 
-pickle.dump(pipeline_clasificacion, open("models/modelo_clasificacion.pkl", "wb"))
-print("Modelo de clasificación guardado")
+with open("models/metricas_clasificacion_todas.json", "w") as f:
+    json.dump(metricas_globales, f, indent=4)
+
+print("\n Pipelines y métricas guardados en /models")
