@@ -123,40 +123,83 @@ with tab1:
 
 # Modelo de Clasificación (Árbol de Decisión)
 with tab2:
-    st.header("Modelo de Clasificación (Árbol de Decisión)")
+    st.header("Modelo de Clasificación")
     
-    # 2.1 Mostrar métricas de entrenamiento
-    st.subheader("Rendimiento del Modelo")
+    opciones_modelo = {
+        "Árbol de Decisión": "arbol_decision",
+        "Regresión Logística": "regresion_logistica",
+        "Support Vector Machine (SVM)": "svm"
+    }
+    
+    modelo_seleccionado_nombre = st.selectbox(
+        "Selecciona el algoritmo predictivo:", 
+        list(opciones_modelo.keys())
+    )
+    modelo_seleccionado_key = opciones_modelo[modelo_seleccionado_nombre]
+    
+    st.subheader(f"Rendimiento del Modelo: {modelo_seleccionado_nombre}")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Accuracy Global", f"{metricas_clas['accuracy']:.2%}")
-    c2.metric("Profundidad del Árbol", metricas_clas["parametros_usados"]["max_depth_usado"])
-    c3.metric("Mín. Samples Leaf", metricas_clas["parametros_usados"]["min_samples_leaf_usado"])
-    c4.metric("Criterio", metricas_clas["parametros_usados"]["criterion"].capitalize())
+    
+    metrics_actual = metricas_clas.get(modelo_seleccionado_key, {})
+    params_actual = metrics_actual.get("parametros_usados", {})
+    
+    c1.metric("Accuracy Global", f"{metrics_actual.get('accuracy', 0.0):.2%}")
+    
+    if modelo_seleccionado_key == "arbol_decision":
+        c2.metric("Max Depth", params_actual.get("max_depth", "N/A"))
+        c3.metric("Min Samples Leaf", params_actual.get("min_samples_leaf", "N/A"))
+        c4.metric("Criterion", str(params_actual.get("criterion", "N/A")).capitalize())
+    elif modelo_seleccionado_key == "regresion_logistica":
+        c2.metric("C (Regul.)", params_actual.get("C", "N/A"))
+        c3.metric("Penalty", str(params_actual.get("penalty", "N/A")).upper())
+        c4.metric("Solver", str(params_actual.get("solver", "N/A")).capitalize())
+    elif modelo_seleccionado_key == "svm":
+        val_c = params_actual.get("C", 0)
+        c2.metric("C (Regul.)", f"{val_c:.4f}" if isinstance(val_c, float) else val_c)
+        c3.metric("Gamma", str(params_actual.get("gamma", "N/A")).capitalize())
+        c4.metric("Kernel", str(params_actual.get("kernel", "N/A")).capitalize())
     
     st.divider()
     
-    # 2.2 Formulario de ingreso de datos
     st.subheader("Realizar una Predicción Manual")
     st.markdown("Ingresa las características del usuario para predecir a qué clase pertenece.")
     
     with st.form("formulario_prediccion"):
-        col_form1, col_form2 = st.columns(2)
+        col_form1, col_form2, col_form3 = st.columns(3)
         
         with col_form1:
-            # ---> ¡ATENCIÓN!: CAMBIA ESTOS CAMPOS POR TUS VARIABLES REALES <---
             input_edad = st.number_input("Edad", min_value=18, max_value=100, value=30)
             input_ingreso = st.number_input("Ingreso Mensual", min_value=0.0, value=1500.0)
             input_gasto = st.number_input("Gasto Mensual", min_value=0.0, value=500.0)
+            input_deuda = st.number_input("Deuda Total", min_value=0.0, value=100.0)
             
         with col_form2:
-            input_deuda = st.number_input("Deuda Total", min_value=0.0, value=100.0)
             input_score = st.number_input("Score Crediticio", min_value=0, max_value=1000, value=600)
             input_antiguedad = st.number_input("Antigüedad (Meses)", min_value=0, value=12)
+            input_ratio = st.number_input("Ratio Endeudamiento", min_value=0.0, value=0.1)
+            input_porcentaje_gasto = st.number_input("Porcentaje Gasto", min_value=0.0, value=0.3)
+
+        with col_form3:
+            input_freq = st.number_input("Frecuencia Compra", min_value=0, value=5)
+            input_u_compra = st.number_input("Última Compra (Días)", min_value=0, value=10)
+            input_n_prod = st.number_input("Num Productos", min_value=0, value=2)
+            input_hora = st.number_input("Hora Registro", min_value=0, max_value=23, value=12)
             
-        # El botón para enviar el formulario
+        st.markdown("### Variables Categóricas")
+        col_cat1, col_cat2 = st.columns(2)
+        with col_cat1:
+            input_tarjeta = st.selectbox("Tiene Tarjeta Crédito", [1, 0])
+            input_genero = st.selectbox("Género", ["Masculino", "Femenino"])
+            input_region = st.selectbox("Región", ["Metropolitana", "Valparaíso", "Biobío", "Otra"])
+            input_plan = st.selectbox("Tipo Plan", ["Basico", "Estandar", "Premium"])
+        with col_cat2:
+            input_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
+            input_canal = st.selectbox("Canal Registro", ["Web", "App", "Presencial"])
+            input_dia = st.selectbox("Día Semana Registro", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"])
+            input_uso = st.selectbox("Uso App", ["Bajo", "Medio", "Alto"])
+            
         submit_button = st.form_submit_button(label="Clasificar Usuario", use_container_width=True)
         
-    # 2.3 Lógica al presionar el botón
     if submit_button:
         datos_cliente = {
             "edad": input_edad,
@@ -164,20 +207,34 @@ with tab2:
             "gasto_mensual": input_gasto,
             "deuda_total": input_deuda,
             "score_crediticio": input_score,
-            "antiguedad_meses": input_antiguedad
+            "antiguedad_meses": input_antiguedad,
+            "ratio_endeudamiento": input_ratio,
+            "porcentaje_gasto": input_porcentaje_gasto,
+            "frecuencia_compra": input_freq,
+            "ultima_compra_dias": input_u_compra,
+            "num_productos": input_n_prod,
+            "hora_registro": input_hora,
+            "tiene_tarjeta_credito": input_tarjeta,
+            "genero": input_genero,
+            "region": input_region,
+            "estado_civil": input_civil,
+            "canal_registro": input_canal,
+            "dia_semana_registro": input_dia,
+            "tipo_plan": input_plan,
+            "uso_app": input_uso,
+            "fecha_registro": "2026-01-01"
         }
         
         with st.spinner("Procesando predicción..."):
             try:
-                # Consumimos el endpoint que creamos en FastAPI
-                res = requests.post("http://ml_service:8000/predict/clasificacion", json=datos_cliente)
+                url_api = f"http://ml_service:8000/predict/clasificacion?modelo={modelo_seleccionado_key}"
+                res = requests.post(url_api, json=datos_cliente)
                 
                 if res.status_code == 200:
                     resultado = res.json()
-                    st.success(f"**Predicción Exitosa:** El usuario pertenece a la **Clase {resultado['clase_predicha']}**")
-                    st.info(f"**Nivel de Certeza (Probabilidad):** {resultado['probabilidad_clase']:.2%}")
+                    st.success(f"Predicción Exitosa: El usuario pertenece a la Clase {resultado['clase_predicha']}")
+                    st.info(f"Nivel de Certeza (Probabilidad): {resultado['probabilidad_clase']:.2%}")
                 else:
-                    # Capturamos el error 400 (ej. falta una columna)
                     error_msg = res.json().get("detail", "Error desconocido")
                     st.error(f"Error en la API: {error_msg}")
                     

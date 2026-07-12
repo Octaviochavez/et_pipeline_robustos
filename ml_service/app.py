@@ -26,7 +26,7 @@ try:
         "regresion_logistica": pickle.load(open("models/modelo_regresion_logistica.pkl", "rb")),
         "svm": pickle.load(open("models/modelo_svm.pkl", "rb"))
     }
-    with open("models/metricas_clasificacion.json") as f:
+    with open("models/metricas_clasificacion_todas.json") as f:
         metricas_clasificacion = json.load(f)
         
     logger.info("¡Todos los modelos y artefactos se cargaron exitosamente en memoria!")
