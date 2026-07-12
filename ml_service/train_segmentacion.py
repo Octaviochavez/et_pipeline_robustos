@@ -12,7 +12,7 @@ from kneed import KneeLocator
 
 os.makedirs("models", exist_ok=True)
 
-usuarios = pd.read_csv("data/usuarios_streaming.csv")
+usuarios = pd.read_csv("../data/usuarios_streaming.csv")
 
 DB_USER = os.getenv("POSTGRES_USER", "admin")
 DB_PASS = os.getenv("POSTGRES_PASSWORD", "duoc2026").strip()
