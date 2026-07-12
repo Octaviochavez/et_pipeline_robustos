@@ -21,7 +21,11 @@ try:
     with open("models/metricas.json") as f:
         metricas_segmentacion = json.load(f)
         
-    pipeline_clasificacion = pickle.load(open("models/modelo_clasificacion.pkl", "rb"))
+    modelos_clasificacion = {
+        "arbol_decision": pickle.load(open("models/modelo_arbol_decision.pkl", "rb")),
+        "regresion_logistica": pickle.load(open("models/modelo_regresion_logistica.pkl", "rb")),
+        "svm": pickle.load(open("models/modelo_svm.pkl", "rb"))
+    }
     with open("models/metricas_clasificacion.json") as f:
         metricas_clasificacion = json.load(f)
         
@@ -89,20 +93,32 @@ def predict_segmentacion(datos: dict):
 
 
 @app.post("/predict/clasificacion")
-def predict_clasificacion(datos: dict):
+def predict_clasificacion(datos: dict, modelo: str = "svm"):
     """
     Recibe las características de un cliente y predice su probabilidad de abandono usando 
-    el Pipeline del Árbol de Decisión entrenado con los mejores parámetros .
+    el modelo seleccionado (arbol_decision, regresion_logistica, o svm).
     """
     try:
+        if modelo not in modelos_clasificacion:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Modelo '{modelo}' no encontrado. Usa: arbol_decision, regresion_logistica, o svm."
+            )
+        
+        pipeline_actual = modelos_clasificacion[modelo]
+
         data_df = pd.DataFrame([datos])
-        prediccion = pipeline_clasificacion.predict(data_df)
-        probabilidades = pipeline_clasificacion.predict_proba(data_df)
+        prediccion = pipeline_actual.predict(data_df)
+        probabilidades = pipeline_actual.predict_proba(data_df)
+        
         return {
+            "modelo_usado": modelo, 
             "clase_predicha": int(prediccion[0]),
             "probabilidad_clase": float(probabilidades.max())
         }
 
+    except HTTPException as he:
+        raise he
     except ValueError as e:
         logger.error(f"Error de consistencia en datos de clasificación: {e}")
         raise HTTPException(status_code=400, detail=f"Entrada inválida para clasificación: {e}")

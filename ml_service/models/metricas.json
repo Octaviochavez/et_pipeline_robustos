@@ -1,0 +1,7 @@
+{
+    "k_optimo": 3,
+    "silhouette_score": 0.2311329300144277,
+    "n_usuarios": 300,
+    "n_clusters": 3,
+    "varianza_pca": 0.44879438257136123
+}
