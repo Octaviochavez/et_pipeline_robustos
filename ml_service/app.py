@@ -108,6 +108,8 @@ def predict_clasificacion(datos: dict, modelo: str = "svm"):
         pipeline_actual = modelos_clasificacion[modelo]
 
         data_df = pd.DataFrame([datos])
+        print(f"Columnas recibidas: {data_df.columns.tolist()}")
+        print(f"Cantidad de columnas: {data_df.shape[1]}")
         prediccion = pipeline_actual.predict(data_df)
         probabilidades = pipeline_actual.predict_proba(data_df)
         

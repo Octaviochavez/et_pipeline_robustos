@@ -133,18 +133,22 @@ with tab2:
     
     modelo_seleccionado_nombre = st.selectbox(
         "Selecciona el algoritmo predictivo:", 
-        list(opciones_modelo.keys())
+        list(opciones_modelo.keys()),
+        key="selector_modelo"
     )
     modelo_seleccionado_key = opciones_modelo[modelo_seleccionado_nombre]
-    
-    st.subheader(f"Rendimiento del Modelo: {modelo_seleccionado_nombre}")
-    c1, c2, c3, c4 = st.columns(4)
-    
-    metrics_actual = metricas_clas.get(modelo_seleccionado_key, {})
-    params_actual = metrics_actual.get("parametros_usados", {})
-    
-    c1.metric("Accuracy Global", f"{metrics_actual.get('accuracy', 0.0):.2%}")
-    
+    if 'metricas_clas' in locals() and modelo_seleccionado_key in metricas_clas:
+        metrics_actual = metricas_clas[modelo_seleccionado_key]
+        st.subheader(f"Rendimiento del Modelo: {modelo_seleccionado_nombre}")
+        c1, c2, c3, c4 = st.columns(4)
+        metrics_actual = metricas_clas.get(modelo_seleccionado_key, {})
+        params_actual = metrics_actual.get("parametros_usados", {})
+        c1.metric("Accuracy Global", f"{metrics_actual.get('accuracy', 0.0):.2%}")
+    else:
+        st.warning("Los datos del modelo seleccionado no están disponibles. Recargando...")
+        st.stop()
+
+
     if modelo_seleccionado_key == "arbol_decision":
         c2.metric("Max Depth", params_actual.get("max_depth", "N/A"))
         c3.metric("Min Samples Leaf", params_actual.get("min_samples_leaf", "N/A"))
@@ -221,8 +225,7 @@ with tab2:
             "canal_registro": input_canal,
             "dia_semana_registro": input_dia,
             "tipo_plan": input_plan,
-            "uso_app": input_uso,
-            "fecha_registro": "2026-01-01"
+            "uso_app": input_uso
         }
         
         with st.spinner("Procesando predicción..."):
