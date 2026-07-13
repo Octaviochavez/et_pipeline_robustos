@@ -38,3 +38,47 @@ jobs: # Define una tarea llamada test_and_build que se ejecutará en un entorno 
         run: |
           docker build -t ml_service ./ml_service
           docker build -t dashboard ./dashboards
+      # Valida que se hayan creado todos los modelos de clasificación y que exista el archivo de métricas
+      - name: Validate classification training
+        run: |
+          python - <<'PY'
+          import os
+          import pickle
+          required_files = [
+            "models/modelo_arbol_decision.pkl",
+            "models/modelo_regresion_logistica.pkl",
+            "models/modelo_svm.pkl",
+            "models/metricas_clasificacion_todas.json"
+          ]
+          missing = [f for f in required_files if not os.path.exists(f)]
+          if missing:
+            raise SystemExit(f"Faltan archivos de entrenamiento: {missing}")
+          print("Entrenamiento de clasificación validado correctamente.")
+          PY
+      - name: Run classification training
+        run: |
+          python ml_service/train_clasificacion.py
+          PY
+        # Valida que se haya entrenado y guardado el modelo KMeans y que genere los resultados de salida
+      - name: Validate segmentation training output
+        run: |
+          python - <<'PY'
+          import os
+
+          required_files = [
+          "models/modelo_kmeans.pkl",
+          "models/scaler.pkl",
+          "models/pca.pkl",
+          "models/metricas.json",
+          "data/usuarios_segmentados.csv",
+          "data/centroides.csv"
+          ]
+
+          missing = [f for f in required_files if not os.path.exista(f)]
+          if missing:
+            raise SystemExit(f"Faltan archivos de segmentación: {missing}")
+          print("Entrenamiento de segmentación validado correctamente.")
+          PY
+      - name: Run segmentation training
+        run: |
+          python ml_service/train_segmentacion.py
