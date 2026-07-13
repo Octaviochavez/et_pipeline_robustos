@@ -259,21 +259,19 @@ if seccion == "Clasificación (Predicción Manual)":
     st.markdown("Ingresa las características del usuario para predecir a qué clase pertenece.")
     
     with st.form("formulario_prediccion"):
-        col_form1, col_form2, col_form3 = st.columns(3)
+        col_form1, col_form2 = st.columns(2)
         
         with col_form1:
             input_edad = st.number_input("Edad", min_value=18, max_value=100, value=30)
             input_ingreso = st.number_input("Ingreso Mensual", min_value=0.0, value=1500.0)
             input_gasto = st.number_input("Gasto Mensual", min_value=0.0, value=500.0)
             input_deuda = st.number_input("Deuda Total", min_value=0.0, value=100.0)
-            
-        with col_form2:
             input_score = st.number_input("Score Crediticio", min_value=0, max_value=1000, value=600)
             input_antiguedad = st.number_input("Antigüedad (Meses)", min_value=0, value=12)
             input_ratio = st.number_input("Ratio Endeudamiento", min_value=0.0, value=0.1)
             input_porcentaje_gasto = st.number_input("Porcentaje Gasto", min_value=0.0, value=0.3)
 
-        with col_form3:
+        with col_form2:
             input_freq = st.number_input("Frecuencia Compra", min_value=0, value=5)
             input_u_compra = st.number_input("Última Compra (Días)", min_value=0, value=10)
             input_n_prod = st.number_input("Num Productos", min_value=0, value=2)
@@ -285,9 +283,9 @@ if seccion == "Clasificación (Predicción Manual)":
             input_tarjeta = st.selectbox("Tiene Tarjeta Crédito", [1, 0])
             input_genero = st.selectbox("Género", ["Masculino", "Femenino"])
             input_region = st.selectbox("Región", ["Metropolitana", "Valparaíso", "Biobío", "Otra"])
-            input_plan = st.selectbox("Tipo Plan", ["Basico", "Estandar", "Premium"])
-        with col_cat2:
             input_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
+        with col_cat2:
+            input_plan = st.selectbox("Tipo Plan", ["Basico", "Estandar", "Premium"])
             input_canal = st.selectbox("Canal Registro", ["Web", "App", "Presencial"])
             input_dia = st.selectbox("Día Semana Registro", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"])
             input_uso = st.selectbox("Uso App", ["Bajo", "Medio", "Alto"])
