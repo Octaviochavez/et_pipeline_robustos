@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import requests
-import pickle
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -11,6 +11,62 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Dashboard ML", layout="wide")
 
 st.title("Plataforma de Modelos de Machine Learning")
+
+
+def graficar_matriz_confusion_api(matriz_payload, titulo="Matriz de Confusión"):
+    labels = matriz_payload.get("labels", ["Clase 0", "Clase 1"])
+    matriz = np.array(matriz_payload.get("valores", [[0, 0], [0, 0]]), dtype=int)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    heatmap = ax.imshow(matriz, cmap="Blues")
+    fig.colorbar(heatmap, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("Predicción", fontweight="bold")
+    ax.set_ylabel("Valor real", fontweight="bold")
+    ax.set_title(titulo, fontweight="bold")
+
+    for i in range(matriz.shape[0]):
+        for j in range(matriz.shape[1]):
+            ax.text(j, i, str(matriz[i, j]), ha="center", va="center", color="black", fontweight="bold")
+
+    fig.tight_layout()
+    st.pyplot(fig)
+
+
+def graficar_curva_roc_api(curva_payload, nombre_modelo="Modelo"):
+    fpr = curva_payload.get("fpr", [])
+    tpr = curva_payload.get("tpr", [])
+    auc = curva_payload.get("auc", 0.0)
+
+    if len(fpr) < 2 or len(tpr) < 2:
+        st.warning("No hay suficientes puntos para graficar la curva ROC.")
+        return
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(fpr, tpr, color="#1f77b4", lw=2, label=f"AUC = {auc:.4f}")
+    ax.plot([0, 1], [0, 1], color="gray", linestyle="--", lw=2, label="Aleatorio")
+    ax.set_xlim([-0.02, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel("Ratio de Falsos Positivos (FPR)")
+    ax.set_ylabel("Ratio de Verdaderos Positivos (TPR)")
+    ax.set_title(f"Curva ROC - {nombre_modelo}", fontweight="bold")
+    ax.legend(loc="lower right")
+    ax.grid(alpha=0.3)
+
+    st.pyplot(fig)
+    st.info(f"ROC-AUC Score para {nombre_modelo}: {auc:.4f}")
+
+
+@st.cache_data(show_spinner=False)
+def obtener_evaluacion_clasificacion(modelo_key):
+    url = f"http://ml_service:8000/evaluacion/clasificacion?modelo={modelo_key}"
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
 
 # 1. Obtiene los datos desde la API
 try:
@@ -169,6 +225,33 @@ if seccion == "Clasificación (Predicción Manual)":
         c2.metric("C (Regul.)", f"{val_c:.4f}" if isinstance(val_c, float) else val_c)
         c3.metric("Gamma", str(params_actual.get("gamma", "N/A")).capitalize())
         c4.metric("Kernel", str(params_actual.get("kernel", "N/A")).capitalize())
+
+    st.divider()
+    st.subheader("Métricas de Rendimiento")
+    try:
+        evaluacion = obtener_evaluacion_clasificacion(modelo_seleccionado_key)
+        metricas_eval = evaluacion.get("metricas", {})
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Accuracy", f"{metricas_eval.get('accuracy', 0.0):.3f}")
+        m2.metric("Precision", f"{metricas_eval.get('precision', 0.0):.3f}")
+        m3.metric("Recall", f"{metricas_eval.get('recall', 0.0):.3f}")
+        m4.metric("F1-Score", f"{metricas_eval.get('f1_score', 0.0):.3f}")
+
+        st.divider()
+        st.subheader("Matriz de Confusión")
+        graficar_matriz_confusion_api(
+            matriz_payload=evaluacion.get("matriz_confusion", {}),
+            titulo=f"Matriz de Confusión - {modelo_seleccionado_nombre}",
+        )
+
+        st.divider()
+        st.subheader("Curva ROC AUC")
+        graficar_curva_roc_api(
+            curva_payload=evaluacion.get("curva_roc", {}),
+            nombre_modelo=modelo_seleccionado_nombre,
+        )
+    except requests.exceptions.RequestException as e:
+        st.error(f"No se pudo obtener la evaluación del backend: {e}")
     
     st.divider()
     
