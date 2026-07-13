@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import pickle
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Configuración de página para que use todo el ancho de la pantalla
@@ -24,11 +27,15 @@ except Exception as e:
     st.error(f"Error al conectar con la API de Machine Learning: {e}")
     st.stop() # Detiene la ejecución si no hay datos
 
-# 2. Creación de Pestañas
-tab1, tab2 = st.tabs(["Segmentación (KMeans)", "Clasificación (Predicción Manual)"])
+# 2. Selector de sección (evita ejecutar ambas vistas en cada rerun)
+seccion = st.radio(
+    "Sección",
+    ["Segmentación (KMeans)", "Clasificación (Predicción Manual)"],
+    horizontal=True,
+)
 
 # Modelo de Segmentación (KMeans)
-with tab1:
+if seccion == "Segmentación (KMeans)":
     st.header("Análisis de Segmentación de Usuarios")
     
     st.subheader("Métricas del modelo")
@@ -122,7 +129,7 @@ with tab1:
 
 
 # Modelo de Clasificación (Árbol de Decisión)
-with tab2:
+if seccion == "Clasificación (Predicción Manual)":
     st.header("Modelo de Clasificación")
     
     opciones_modelo = {
