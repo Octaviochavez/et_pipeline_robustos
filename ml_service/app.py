@@ -106,8 +106,16 @@ def predict_clasificacion(datos: dict, modelo: str = "svm"):
             )
         
         pipeline_actual = modelos_clasificacion[modelo]
-
         data_df = pd.DataFrame([datos])
+<<<<<<< Updated upstream
+=======
+        if 'id_cliente' not in data_df.columns:
+            data_df['id_cliente'] = 999999
+        if 'fecha_registro' not in data_df.columns:
+            data_df['fecha_registro'] = "2026-01-01"
+        if 'codigo_postal' not in data_df.columns:
+            data_df['codigo_postal'] = "0000000"
+>>>>>>> Stashed changes
         prediccion = pipeline_actual.predict(data_df)
         probabilidades = pipeline_actual.predict_proba(data_df)
         

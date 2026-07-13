@@ -152,6 +152,28 @@ with tab2:
             input_deuda = st.number_input("Deuda Total", min_value=0.0, value=100.0)
             input_score = st.number_input("Score Crediticio", min_value=0, max_value=1000, value=600)
             input_antiguedad = st.number_input("Antigüedad (Meses)", min_value=0, value=12)
+<<<<<<< Updated upstream
+=======
+
+        with col_form3:
+            input_freq = st.number_input("Frecuencia Compra", min_value=0, value=5)
+            input_u_compra = st.number_input("Última Compra (Días)", min_value=0, value=10)
+            input_n_prod = st.number_input("Num Productos", min_value=0, value=2)
+            input_hora = st.number_input("Hora Registro", min_value=0, max_value=23, value=12)
+            
+        st.markdown("### Variables Categóricas")
+        col_cat1, col_cat2 = st.columns(2)
+        with col_cat1:
+            input_tarjeta = st.selectbox("Tiene Tarjeta Crédito", [1, 0])
+            input_genero = st.selectbox("Género", ["Masculino", "Femenino"])
+            input_region = st.selectbox("Región", ["Metropolitana", "Valparaíso", "Biobío", "Otra"])
+            input_plan = st.selectbox("Tipo Plan", ["Basico", "Estandar", "Premium"])
+        with col_cat2:
+            input_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
+            input_canal = st.selectbox("Canal Registro", ["Web", "App", "Presencial"])
+            input_dia = st.selectbox("Día Semana Registro", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"])
+            input_uso = st.selectbox("Uso App", ["Bajo", "Medio", "Alto"])
+>>>>>>> Stashed changes
             
         # El botón para enviar el formulario
         submit_button = st.form_submit_button(label="Clasificar Usuario", use_container_width=True)
@@ -164,7 +186,23 @@ with tab2:
             "gasto_mensual": input_gasto,
             "deuda_total": input_deuda,
             "score_crediticio": input_score,
+<<<<<<< Updated upstream
             "antiguedad_meses": input_antiguedad
+=======
+            "antiguedad_meses": input_antiguedad,
+            "frecuencia_compra": input_freq,
+            "ultima_compra_dias": input_u_compra,
+            "num_productos": input_n_prod,
+            "hora_registro": input_hora,
+            "tiene_tarjeta_credito": input_tarjeta,
+            "genero": input_genero,
+            "region": input_region,
+            "estado_civil": input_civil,
+            "canal_registro": input_canal,
+            "dia_semana_registro": input_dia,
+            "tipo_plan": input_plan,
+            "uso_app": input_uso
+>>>>>>> Stashed changes
         }
         
         with st.spinner("Procesando predicción..."):

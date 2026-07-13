@@ -416,7 +416,7 @@ def build_preprocessor(
 
     pipeline_nominales = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ("onehot", OneHotEncoder(drop="first",handle_unknown="ignore", sparse_output=False)),
     ])
 
     pipeline_ordinales = Pipeline(steps=[
