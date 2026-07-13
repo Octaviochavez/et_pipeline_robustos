@@ -1,0 +1,244 @@
+import os
+import sys
+import json
+import pickle
+import logging
+import pandas as pd
+import sklearn
+from fastapi import FastAPI, HTTPException
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+    roc_curve,
+    roc_auc_score,
+)
+from sklearn.model_selection import train_test_split
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from tools.functions import (
+    FeatureEngineering,
+    Winsorizer,
+    CorrelationFilter,
+    eliminar_nulos_objetivo,
+    separar_objetivo_features,
+    corregir_valores_negativos,
+)
+
+sklearn.set_config(transform_output="pandas")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Servicio Integrado de Machine Learning (Segmentación y Clasificación)")
+
+CLASIFICACION_DATASET_URL = "https://raw.githubusercontent.com/ramirezluna-david/proyecto_modelado_grp2/rama_david/data/dataset_clientes.csv"
+TARGET_CLASIFICACION = "abandono"
+_cache_evaluacion_clasificacion = {}
+
+try:
+    modelo_kmeans = pickle.load(open("models/modelo_kmeans.pkl", "rb"))
+    scaler_kmeans = pickle.load(open("models/scaler.pkl", "rb"))
+    with open("models/metricas.json") as f:
+        metricas_segmentacion = json.load(f)
+        
+    modelos_clasificacion = {
+        "arbol_decision": pickle.load(open("models/modelo_arbol_decision.pkl", "rb")),
+        "regresion_logistica": pickle.load(open("models/modelo_regresion_logistica.pkl", "rb")),
+        "svm": pickle.load(open("models/modelo_svm.pkl", "rb"))
+    }
+
+    # Compatibilidad con modelos antiguos: completar metadata de columnas
+    # para que CorrelationFilter elimine columnas por nombre en inferencia.
+    for pipeline_modelo in modelos_clasificacion.values():
+        try:
+            preprocesador = pipeline_modelo.named_steps["preprocesamiento"]
+            colinealidad = pipeline_modelo.named_steps["clasificador"].named_steps["colinealidad"]
+            if getattr(colinealidad, "columns_", None) is None:
+                colinealidad.columns_ = list(preprocesador.get_feature_names_out())
+        except Exception as e:
+            logger.warning(f"No fue posible inicializar columns_ en CorrelationFilter: {e}")
+
+    with open("models/metricas_clasificacion_todas.json") as f:
+        metricas_clasificacion = json.load(f)
+        
+    logger.info("¡Todos los modelos y artefactos se cargaron exitosamente en memoria!")
+except Exception as e:
+    logger.critical(f"Error crítico al cargar los modelos de ML: {e}")
+    raise RuntimeError(f"No se pudo iniciar el servicio de ML debido a fallas en los archivos .pkl/.json: {e}")
+
+
+def _obtener_test_clasificacion():
+    """Reconstruye el mismo split usado durante entrenamiento para evaluar modelos en backend."""
+    data_raw = pd.read_csv(CLASIFICACION_DATASET_URL)
+    data_limpia = eliminar_nulos_objetivo(data_raw, target=TARGET_CLASIFICACION)
+    _, y, X = separar_objetivo_features(data_limpia, target=TARGET_CLASIFICACION, drop_duplicates=True)
+    X = corregir_valores_negativos(X, verbose=False)
+
+    _, X_test, _, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+    )
+    return X_test, y_test
+
+
+def _calcular_evaluacion_clasificacion(modelo: str):
+    if modelo in _cache_evaluacion_clasificacion:
+        return _cache_evaluacion_clasificacion[modelo]
+
+    if modelo not in modelos_clasificacion:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Modelo '{modelo}' no encontrado. Usa: arbol_decision, regresion_logistica, o svm.",
+        )
+
+    pipeline_actual = modelos_clasificacion[modelo]
+    X_test, y_test = _obtener_test_clasificacion()
+
+    y_pred = pipeline_actual.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    recall = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+
+    matriz = confusion_matrix(y_test, y_pred)
+
+    y_prob = pipeline_actual.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc = roc_auc_score(y_test, y_prob)
+
+    resultado = {
+        "modelo_usado": modelo,
+        "tamano_test": int(len(y_test)),
+        "metricas": {
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1),
+        },
+        "matriz_confusion": {
+            "labels": ["No Abandona", "Si Abandona"],
+            "valores": matriz.tolist(),
+        },
+        "curva_roc": {
+            "fpr": fpr.tolist(),
+            "tpr": tpr.tolist(),
+            "auc": float(auc),
+        },
+    }
+    _cache_evaluacion_clasificacion[modelo] = resultado
+    return resultado
+
+
+@app.get("/")
+def inicio():
+    """Comprobación de que el microservicio multi-modelo está activo."""
+    return {
+        "mensaje": "Servicio de Machine Learning (Segmentación y Clasificación) funcionando correctamente."
+    }
+
+@app.get("/dashboard-data")
+def dashboard_data():
+    """Expone los datos y métricas necesarios para los gráficos del Dashboard."""
+    try:
+        usuarios = pd.read_csv("data/usuarios_segmentados.csv")
+        centroides = pd.read_csv("data/centroides.csv")
+        len_usuarios = len(usuarios)
+
+        if len_usuarios > 0:
+            logger.info(f"Datos de dashboard consultados. Total registros: {len_usuarios}")
+        else:
+            logger.warning("El archivo usuarios_segmentados.csv está vacío.")
+
+        return {
+            "usuarios": usuarios.to_dict(orient="records"),
+            "centroides": centroides.to_dict(orient="records"),
+            "metricas_segmentacion": metricas_segmentacion,
+            "metricas_clasificacion": metricas_clasificacion
+        }
+
+    except FileNotFoundError as e:
+        logger.error(f"Archivo no encontrado en dashboard_data: {e}")
+        raise HTTPException(status_code=404, detail=f"Archivo de datos no encontrado: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error inesperado al cargar datos de dashboard: {e}")
+        raise HTTPException(status_code=500, detail="Error interno al procesar los datos del dashboard")
+
+@app.post("/predict/segmentacion")
+def predict_segmentacion(datos: dict):
+    """
+    Recibe los datos crudos de un cliente y le asigna un cluster (KMeans).
+    """
+    try:
+        data_df = pd.DataFrame([datos])
+        # Usamos el scaler y el modelo cargados para segmentación
+        X_scaled = scaler_kmeans.transform(data_df)
+        cluster = modelo_kmeans.predict(X_scaled)
+        return {"cluster": int(cluster[0])}
+
+    except ValueError as e:
+        logger.error(f"Error de consistencia en datos de segmentación: {e}")
+        raise HTTPException(status_code=400, detail=f"Entrada inválida para segmentación: {e}")
+    except KeyError as e:
+        logger.error(f"Falta columna obligatoria en segmentación: {e}")
+        raise HTTPException(status_code=400, detail=f"Falta columna obligatoria: {e}")
+    except Exception as e:
+        logger.error(f"Error inesperado en endpoint de segmentación: {e}")
+        raise HTTPException(status_code=500, detail="Error interno en la predicción de segmentación")
+
+
+@app.post("/predict/clasificacion")
+def predict_clasificacion(datos: dict, modelo: str = "svm"):
+    """
+    Recibe las características de un cliente y predice su probabilidad de abandono usando 
+    el modelo seleccionado (arbol_decision, regresion_logistica, o svm).
+    """
+    try:
+        if modelo not in modelos_clasificacion:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Modelo '{modelo}' no encontrado. Usa: arbol_decision, regresion_logistica, o svm."
+            )
+        
+        pipeline_actual = modelos_clasificacion[modelo]
+
+        data_df = pd.DataFrame([datos])
+        print(f"Columnas recibidas: {data_df.columns.tolist()}")
+        print(f"Cantidad de columnas: {data_df.shape[1]}")
+        prediccion = pipeline_actual.predict(data_df)
+        probabilidades = pipeline_actual.predict_proba(data_df)
+        
+        return {
+            "modelo_usado": modelo, 
+            "clase_predicha": int(prediccion[0]),
+            "probabilidad_clase": float(probabilidades.max())
+        }
+
+    except HTTPException as he:
+        raise he
+    except ValueError as e:
+        logger.error(f"Error de consistencia en datos de clasificación: {e}")
+        raise HTTPException(status_code=400, detail=f"Entrada inválida para clasificación: {e}")
+    except KeyError as e:
+        logger.error(f"Falta columna obligatoria en clasificación: {e}")
+        raise HTTPException(status_code=400, detail=f"Falta columna obligatoria: {e}")
+    except Exception as e:
+        logger.error(f"Error inesperado en endpoint de clasificación: {e}")
+        raise HTTPException(status_code=500, detail="Error interno en la predicción de clasificación")
+
+
+@app.get("/evaluacion/clasificacion")
+def evaluacion_clasificacion(modelo: str = "svm"):
+    """Entrega métricas, matriz de confusión y curva ROC-AUC calculadas en backend."""
+    try:
+        return _calcular_evaluacion_clasificacion(modelo=modelo)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error inesperado en endpoint de evaluación de clasificación: {e}")
+        raise HTTPException(status_code=500, detail="Error interno al calcular evaluación de clasificación")
