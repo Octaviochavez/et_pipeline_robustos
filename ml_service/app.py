@@ -4,11 +4,14 @@ import json
 import pickle
 import logging
 import pandas as pd
+import sklearn
 from fastapi import FastAPI, HTTPException
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from tools.functions import FeatureEngineering, Winsorizer, CorrelationFilter
+
+sklearn.set_config(transform_output="pandas")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,6 +29,18 @@ try:
         "regresion_logistica": pickle.load(open("models/modelo_regresion_logistica.pkl", "rb")),
         "svm": pickle.load(open("models/modelo_svm.pkl", "rb"))
     }
+
+    # Compatibilidad con modelos antiguos: completar metadata de columnas
+    # para que CorrelationFilter elimine columnas por nombre en inferencia.
+    for pipeline_modelo in modelos_clasificacion.values():
+        try:
+            preprocesador = pipeline_modelo.named_steps["preprocesamiento"]
+            colinealidad = pipeline_modelo.named_steps["clasificador"].named_steps["colinealidad"]
+            if getattr(colinealidad, "columns_", None) is None:
+                colinealidad.columns_ = list(preprocesador.get_feature_names_out())
+        except Exception as e:
+            logger.warning(f"No fue posible inicializar columns_ en CorrelationFilter: {e}")
+
     with open("models/metricas_clasificacion_todas.json") as f:
         metricas_clasificacion = json.load(f)
         
