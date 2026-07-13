@@ -6,10 +6,27 @@ import logging
 import pandas as pd
 import sklearn
 from fastapi import FastAPI, HTTPException
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+    roc_curve,
+    roc_auc_score,
+)
+from sklearn.model_selection import train_test_split
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from tools.functions import FeatureEngineering, Winsorizer, CorrelationFilter
+from tools.functions import (
+    FeatureEngineering,
+    Winsorizer,
+    CorrelationFilter,
+    eliminar_nulos_objetivo,
+    separar_objetivo_features,
+    corregir_valores_negativos,
+)
 
 sklearn.set_config(transform_output="pandas")
 
@@ -17,6 +34,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Servicio Integrado de Machine Learning (Segmentación y Clasificación)")
+
+CLASIFICACION_DATASET_URL = "https://raw.githubusercontent.com/ramirezluna-david/proyecto_modelado_grp2/rama_david/data/dataset_clientes.csv"
+TARGET_CLASIFICACION = "abandono"
+_cache_evaluacion_clasificacion = {}
 
 try:
     modelo_kmeans = pickle.load(open("models/modelo_kmeans.pkl", "rb"))
@@ -48,6 +69,70 @@ try:
 except Exception as e:
     logger.critical(f"Error crítico al cargar los modelos de ML: {e}")
     raise RuntimeError(f"No se pudo iniciar el servicio de ML debido a fallas en los archivos .pkl/.json: {e}")
+
+
+def _obtener_test_clasificacion():
+    """Reconstruye el mismo split usado durante entrenamiento para evaluar modelos en backend."""
+    data_raw = pd.read_csv(CLASIFICACION_DATASET_URL)
+    data_limpia = eliminar_nulos_objetivo(data_raw, target=TARGET_CLASIFICACION)
+    _, y, X = separar_objetivo_features(data_limpia, target=TARGET_CLASIFICACION, drop_duplicates=True)
+    X = corregir_valores_negativos(X, verbose=False)
+
+    _, X_test, _, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+    )
+    return X_test, y_test
+
+
+def _calcular_evaluacion_clasificacion(modelo: str):
+    if modelo in _cache_evaluacion_clasificacion:
+        return _cache_evaluacion_clasificacion[modelo]
+
+    if modelo not in modelos_clasificacion:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Modelo '{modelo}' no encontrado. Usa: arbol_decision, regresion_logistica, o svm.",
+        )
+
+    pipeline_actual = modelos_clasificacion[modelo]
+    X_test, y_test = _obtener_test_clasificacion()
+
+    y_pred = pipeline_actual.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    recall = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+
+    matriz = confusion_matrix(y_test, y_pred)
+
+    y_prob = pipeline_actual.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc = roc_auc_score(y_test, y_prob)
+
+    resultado = {
+        "modelo_usado": modelo,
+        "tamano_test": int(len(y_test)),
+        "metricas": {
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1),
+        },
+        "matriz_confusion": {
+            "labels": ["No Abandona", "Si Abandona"],
+            "valores": matriz.tolist(),
+        },
+        "curva_roc": {
+            "fpr": fpr.tolist(),
+            "tpr": tpr.tolist(),
+            "auc": float(auc),
+        },
+    }
+    _cache_evaluacion_clasificacion[modelo] = resultado
+    return resultado
 
 
 @app.get("/")
@@ -145,3 +230,15 @@ def predict_clasificacion(datos: dict, modelo: str = "svm"):
     except Exception as e:
         logger.error(f"Error inesperado en endpoint de clasificación: {e}")
         raise HTTPException(status_code=500, detail="Error interno en la predicción de clasificación")
+
+
+@app.get("/evaluacion/clasificacion")
+def evaluacion_clasificacion(modelo: str = "svm"):
+    """Entrega métricas, matriz de confusión y curva ROC-AUC calculadas en backend."""
+    try:
+        return _calcular_evaluacion_clasificacion(modelo=modelo)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error inesperado en endpoint de evaluación de clasificación: {e}")
+        raise HTTPException(status_code=500, detail="Error interno al calcular evaluación de clasificación")
