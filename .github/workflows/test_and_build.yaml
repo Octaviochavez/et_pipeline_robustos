@@ -1,33 +1,40 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-#Nombre de flujo de trabajo
+# Nombre del workflow
 name: Python application
 
-#indica cuando tiene que ejecutarse este workflow
+# indica cuando tiene que ejecutarse este workflow
 on:
-  # Genera un push o pull request a main para ejecutar el workflow
+  # Se ejecuta cuando hacen un push o un pull_request hacia la rama main
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
 
-#Permisos
+# Permisos: Le da al workflow permiso de lectura al contenido del repositorio
 permissions:
   contents: read
 
-jobs: #Que tiene que ejecutar este pipeline de CI/CD
+jobs: # Define una tarea llamada test_and_build que se ejecutará en un entorno Ubuntu.
   test_and_build:
-    #Toma una imagen de ubuntu para ejecutar el workflow
+    # Toma una imagen de ubuntu para ejecutar el workflow
     runs-on: ubuntu-latest
-    #Pasos a ejecutar en el workflow
-    steps:
-      - uses: actions/checkout@v4
+    steps: # Pasos del workflow
+      - uses: actions/checkout@v4 # Descarga el código del repositorio al entorno de GitHub Actions.
       - name: Set up Python 3.12
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v3 # Instala Python 3.12 para que el proyecto pueda ejecutarse ahí
         with:
           python-version: "3.12"
+          # Instalar dependencias del servicio analitico:
       - name: Install dependencies on ML service
-        run: pip install -r ml_service/requirements.txt
+        run:
+          pip install -r ml_service/requirements.txt
+          # Instalar dependencias del servicio de visualizacion:
       - name: Install dependencies on Dashboard
         run: pip install -r dashboards/requirements.txt
+      # Valida que los Dockerfiles funcionan y que detecte errores de dependencia temprano
+      - name: Build Docker images
+        run: |
+          docker build -t ml_service ./ml_service
+          docker build -t dashboard ./dashboards

@@ -33,9 +33,11 @@ class CorrelationFilter(BaseEstimator, TransformerMixin):
   def __init__(self, threshold=0.9):
     self.threshold = threshold
     self.columns_to_drop_ = None
+    self.columns_ = None
 
   def fit(self, X, y=None):
     X_df = pd.DataFrame(X)
+    self.columns_ = list(X_df.columns)
 
     corr_matrix = X_df.corr().abs()
     upper = corr_matrix.where(
@@ -49,7 +51,11 @@ class CorrelationFilter(BaseEstimator, TransformerMixin):
     return self
 
   def transform(self, X):
-    X_df = pd.DataFrame(X)
+    columns_ = getattr(self, "columns_", None)
+    if columns_ is not None and hasattr(X, "shape") and X.shape[1] == len(columns_):
+      X_df = pd.DataFrame(X, columns=columns_)
+    else:
+      X_df = pd.DataFrame(X)
     X_filtered = X_df.drop(columns=self.columns_to_drop_, errors="ignore")
     return X_filtered.values
 
